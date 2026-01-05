@@ -10,6 +10,8 @@
 #include <assert.h>
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/basic_file_sink.h"
+#include "my_logger.h"
+
 
 using namespace std;
 
@@ -97,27 +99,6 @@ void* producer(void* p) {
     }
     clock_t end_time = clock();
 
-    static auto logger = spdlog::basic_logger_mt("consumer_logger", "logs/consumer.log");
-    
-    while (p_param->terminate == false) {
-        if (p_queue->IsEmpty()) {
-            usleep(10);
-            continue;
-        }
-        p_queue->Lock();
-        log_data * data = p_queue->Pop();
-        p_queue->Unlock();
-        
-        if (data) {
-            // Log using spdlog
-            logger->info(data->data);
-        }
-        
-        p_feedback_queue->Lock();
-        p_feedback_queue->Push(data);
-        p_feedback_queue->Unlock();
-    }
-
     p_param->time_taken = ((double)(end_time - start_time)) / (CLOCKS_PER_SEC * TEST_MAX_MESSAGES);
 
     while (p_param->terminate == false) {
@@ -138,6 +119,26 @@ void* consumer(void* p) {
     Queue *p_feedback_queue = p_param->p_feedback_queue;
 
     cout << "Initialized Consumer thread[" << thread_idx << "] = " << pthread_self() << " as_uint64_t = " << tid << endl;
+
+    static MyLogger logger("logs/consumer.log");
+    
+    while (p_param->terminate == false) {
+        if (p_queue->IsEmpty()) {
+            usleep(10);
+            continue;
+        }
+        p_queue->Lock();
+        log_data * data = p_queue->Pop();
+        p_queue->Unlock();
+        
+        if (data) {
+            logger.log(data->data);
+        }
+        
+        p_feedback_queue->Lock();
+        p_feedback_queue->Push(data);
+        p_feedback_queue->Unlock();
+    }
 
     p_param->init_flag = true;
 
