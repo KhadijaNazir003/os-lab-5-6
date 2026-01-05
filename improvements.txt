@@ -1,0 +1,64 @@
+Improvement 1: Batching (No More Constant Flushing!)
+cpp// NEW CODE - SMART!
+void write_loop() {
+    // Collect MULTIPLE messages
+    while (!message_queue.empty()) {
+        local_batch.push_back(message_queue.front());
+        message_queue.pop();
+    }
+    
+    // Write ALL messages at once
+    for (const auto& msg : local_batch) {
+        log_file << msg;
+    }
+    
+    // Flush only ONCE for the whole batch!
+    log_file.flush();
+}
+What changed:
+
+Instead of flushing 8,000 times, we flush maybe 10-50 times
+We group messages together and write them as a batch
+Disk operations are minimized
+
+Impact: This alone gives us 100-1000x speedup!
+
+Improvement 2: Background Thread (Async Logging)
+cpp// Producer thread does this:
+void log(const std::string& message) {
+    message_queue.push(message);  // ← Just add to queue
+    return;                        // ← Return IMMEDIATELY!
+}
+
+// Separate background thread does this:
+void write_loop() {
+    while (true) {
+        // Take messages from queue
+        // Write to file
+        // Flush periodically
+    }
+}
+What changed:
+
+Producer threads just drop messages in a queue and continue working
+A separate "writer thread" handles all the slow file operations
+Producers never wait for disk I/O
+
+Real-world analogy: Instead of everyone mailing their own letters, there's now a mail person who collects everyone's letters and takes them to the post office. You just drop your letter in the mailbox and get back to work!
+Impact: Producer threads run at full speed without waiting!
+
+Improvement 3: Reduced Lock Time
+cpp// NEW CODE
+void log(const std::string& message) {
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        message_queue.push(message);  // ← Very fast (just memory)
+    }  // ← Lock released IMMEDIATELY
+}
+What changed:
+
+Lock is only held for adding to queue (microseconds)
+Lock is NOT held during file writing (milliseconds)
+1000x reduction in lock hold time
+
+Impact: Almost zero contention between threads!
