@@ -8,6 +8,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <assert.h>
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/basic_file_sink.h"
 
 using namespace std;
 
@@ -94,6 +96,27 @@ void* producer(void* p) {
         p_queue->Unlock();
     }
     clock_t end_time = clock();
+
+    static auto logger = spdlog::basic_logger_mt("consumer_logger", "logs/consumer.log");
+    
+    while (p_param->terminate == false) {
+        if (p_queue->IsEmpty()) {
+            usleep(10);
+            continue;
+        }
+        p_queue->Lock();
+        log_data * data = p_queue->Pop();
+        p_queue->Unlock();
+        
+        if (data) {
+            // Log using spdlog
+            logger->info(data->data);
+        }
+        
+        p_feedback_queue->Lock();
+        p_feedback_queue->Push(data);
+        p_feedback_queue->Unlock();
+    }
 
     p_param->time_taken = ((double)(end_time - start_time)) / (CLOCKS_PER_SEC * TEST_MAX_MESSAGES);
 
